@@ -8,7 +8,9 @@ import time
 from train_model import Trainer_KBQA
 from parsing import add_parse_args
 import random
-
+os.environ['CURL_CA_BUNDLE'] = ''
+os.environ['http_proxy']="http://127.0.0.1:7890"
+os.environ['https_proxy']="http://127.0.0.1:7890"
 parser = argparse.ArgumentParser()
 add_parse_args(parser)
 
@@ -21,7 +23,7 @@ np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 torch.cuda.manual_seed(args.seed)
 
-
+# 如果没提供实验名称会自动生成名称，如Experiment name: mnist-lenet-1682075363
 if args.experiment_name == None:
     timestamp = str(int(time.time()))
     args.experiment_name = "{}-{}-{}".format(
@@ -37,8 +39,9 @@ def main():
     logger = create_logger(args)
     
     trainer = Trainer_KBQA(args=vars(args), model_name=args.model_name, logger=logger)
-    
+
     if not args.is_eval:
+        # 训练模式
         trainer.train(0, args.num_epoch - 1)
     else:
         assert args.load_experiment is not None
@@ -47,6 +50,7 @@ def main():
             print("Loading pre trained model from {}".format(ckpt_path))
         else:
             ckpt_path = None
+        #评估模式
         trainer.evaluate_single(ckpt_path)
 
 

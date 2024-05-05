@@ -122,6 +122,7 @@ class BaseModel(torch.nn.Module):
             
 
         # initialize relation embedding
+        # False
         if self.relation_emb_file is not None:
             np_tensor = self.load_relation_file(self.relation_emb_file)
             #print('check?', np_tensor.shape)
@@ -135,8 +136,10 @@ class BaseModel(torch.nn.Module):
                 self.relation_embedding.weight.requires_grad = False
             else:
                 self.relation_embedding.weight.requires_grad = True
-
+        # 从这开始运行
         elif self.relation_word_emb:
+            # 1441420
+            # 6103
             self.rel_dim = self.entity_dim
             self.relation_embedding = nn.Embedding(num_embeddings=num_relation+1, embedding_dim=self.rel_dim)
             self.relation_embedding.weight.requires_grad = True

@@ -3,3 +3,6 @@ data/
 __pycache__/
 out/
 wandb/*
+runs/*
+.idea
+.vscode

@@ -3,19 +3,19 @@ from utils import create_logger
 import time
 import numpy as np
 import os, math, copy
-
+from torch.autograd import Variable
 import torch
 from torch.optim.lr_scheduler import ExponentialLR
 import torch.optim as optim
 from utils import RAdam
-
+from torchview import draw_graph
 from tqdm import tqdm
 tqdm.monitor_iterval = 0
-
+from torch.utils.tensorboard import SummaryWriter
 from dataset_load import load_data
 from models.NuTrea.nutrea import NuTrea
 from evaluate import Evaluator
-
+# from torch
 class Trainer_KBQA(object):
     def __init__(self, args, model_name, logger=None):
         self.args = args
@@ -29,6 +29,7 @@ class Trainer_KBQA(object):
         self.test_batch_size = args['test_batch_size']
         self.device = torch.device('cuda' if args['use_cuda'] else 'cpu')
         self.reset_time = 0
+        # 加载数据集；args['lm'] = sbert
         self.load_data(args, args['lm'])
         
         if 'decay_rate' in args:
@@ -50,6 +51,7 @@ class Trainer_KBQA(object):
         self.evaluator = Evaluator(args=args, model=self.model, entity2id=self.entity2id,
                                        relation2id=self.relation2id, device=self.device)
         self.load_pretrain()
+        # 初始化优化器
         self.optim_def()
         
         self.num_relation =  self.num_kb_relation
@@ -113,6 +115,7 @@ class Trainer_KBQA(object):
             self.warmup()
         print("Start Training------------------")
         eval_f1, eval_h1, test_f1, test_h1 = 0.0, 0.0, 0.0, 0.0
+
         for epoch in range(start_epoch, end_epoch + 1):
             st = time.time()
 
@@ -183,8 +186,10 @@ class Trainer_KBQA(object):
     def warmup(self):
         self.train_data.reset_batches(is_sequential=True)
         num_iter = math.ceil(self.train_data.num_data / self.args['batch_size'])
+        # 356
         for iteration in tqdm(range(num_iter)):
             batch = self.train_data.get_batch(iteration, self.args['batch_size'], self.args['fact_drop'])
+
             self.model.train_ief(batch)
 
     def train_epoch(self):
@@ -194,10 +199,28 @@ class Trainer_KBQA(object):
         num_epoch = math.ceil(self.train_data.num_data / self.args['batch_size'])
         h1_list_all = []
         f1_list_all = []
+        # writer = SummaryWriter()
+
+
+        # make_dot(self.model(batch, training=True)[0],params=dict(self.model.named_parameters()))
+        # writer.add_graph(self.model, input_to_model=input_data)  ##alexnet输入是227*227
+        # writer.close()
         for iteration in tqdm(range(num_epoch)):
+            # 取批次
+            # candidate_entities
+            # query_entities
+            # kb_adj_mats
+            # q_input
+            # seed_dist
+            # true_batch_id
+            # answer_dists
             batch = self.train_data.get_batch(iteration, self.args['batch_size'], self.args['fact_drop'])
-            
+
+
+            # len(batch)
             self.optim_model.zero_grad()
+
+
             loss, _, _, tp_list = self.model(batch, training=True)
             # if tp_list is not None:
             h1_list, f1_list = tp_list

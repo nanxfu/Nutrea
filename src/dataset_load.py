@@ -26,8 +26,11 @@ class BasicDataLoader(object):
     """
 
     def __init__(self, config, word2id, relation2id, entity2id, tokenize, data_type="train"):
+        # 'sbert'
         self.tokenize = tokenize
+
         self._parse_args(config, word2id, relation2id, entity2id)
+        # data_type = train/test/valida
         self._load_file(config, data_type)
         self._load_data()
         
@@ -46,7 +49,8 @@ class BasicDataLoader(object):
         self.data = []
         skip_index = set()
         index = 0
-
+        # test_simple
+        # {'id': 'WebQTrn-239', 'question': 'when did the lakers win the championship', 'entities': [71289], 'answers': [{'kb_id': 'm.08x9v9', 'text': '1988 NBA Finals'}, {'kb_id': 'm.08x9hh', 'text': '2001 NBA Finals'}, {'kb_id': 'm.08x9z5', 'text': '1982 NBA Finals'}, {'kb_id': 'm.0cs2tz', 'text': '1954 NBA Finals'}, {'kb_id': 'm.0n4cn6w', 'text': '1948 NBL Finals'}, {'kb_id': 'm.0bx_x85', 'text': '2010 NBA Finals'}, {'kb_id': 'm.08x9gt', 'text': '2000 NBA Finals'}, {'kb_id': 'm.0cs2wc', 'text': '1953 NBA Finals'}, {'kb_id': 'm.0cs1ny', 'text': '1972 NBA Finals'}, {'kb_id': 'm.0ct81k', 'text': '1949 BAA Finals'}, {'kb_id': 'm.08x9ff', 'text': '2002 NBA Finals'}, {'kb_id': 'm.08x9w1', 'text': '1987 NBA Finals'}, {'kb_id': 'm.0ct7_g', 'text': '1950 NBA Finals'}, {'kb_id': 'm.04gg8b0', 'text': '2009 NBA Finals'}, {'kb_id': 'm.0cs2z5', 'text': '1952 NBA Finals'}, {'kb_id': 'm.08x9_6', 'text': '1980 NBA Finals'}, {'kb_id': 'm.08x9x3', 'text': '1985 NBA Finals'}], 'subgraph': {'tuples': [[182921, 542, 182922], [153341, 94, 118969], [20509, 531, 71289], [71353, 915, 182923], [182924, 2557, 182925], [182926, 33, 76], [118969, 979, 153343], [130316, 921, 182927], [182928, 729, 71289], [182929, 622, 26054], [182930, 13, 5931], [182931, 622, 25989], [71289, 565, 182932], [182933, 0, 8190], [71253, 615, 41200], [182934, 545, 182935]]...,entities:[]....}}
         with open(data_file) as f_in:
             for line in tqdm(f_in):
                 if index == config['max_train'] and data_type == "train": break  #break if we reach max_question_size
@@ -61,6 +65,7 @@ class BasicDataLoader(object):
 
         print("skip", skip_index)
         print('max_facts: ', self.max_facts)
+        # list{question:"...",answer:}
         self.num_data = len(self.data)
         self.batches = np.arange(self.num_data)
 
@@ -78,6 +83,7 @@ class BasicDataLoader(object):
 
         self.question_id = []
         self.candidate_entities = np.full((self.num_data, self.max_local_entity), len(self.entity2id), dtype=int)
+        # nd_array: [None....,2048]
         self.kb_adj_mats = np.empty(self.num_data, dtype=object)
         self.q_adj_mats = np.empty(self.num_data, dtype=object)
         self.kb_fact_rels = np.full((self.num_data, self.max_facts), self.num_kb_relation, dtype=int)
@@ -95,7 +101,9 @@ class BasicDataLoader(object):
         """
         Builds necessary dictionaries and stores arguments.
         """
+        # false
         self.data_eff = config['data_eff']
+        # webqsp
         self.data_name = config['name']
 
         if 'use_inverse_relation' in config:
@@ -119,9 +127,11 @@ class BasicDataLoader(object):
         self.relation2id = relation2id
         self.entity2id = entity2id
         self.id2entity = {i: entity for entity, i in entity2id.items()}
+        # seq
         self.q_type = config['q_type']
-
+        # False
         if self.use_inverse_relation:
+            # 6103
             self.num_kb_relation = 2 * len(relation2id)
         else:
             self.num_kb_relation = len(relation2id)
@@ -256,6 +266,8 @@ class BasicDataLoader(object):
             head_list = []
             rel_list = []
             tail_list = []
+            # tpl = tuple
+            #
             for i, tpl in enumerate(sample['subgraph']['tuples']):
                 sbj, rel, obj = tpl
                 try:
@@ -299,6 +311,7 @@ class BasicDataLoader(object):
 
             # construct distribution for answers
             answer_list = []
+            # sample['answers']={'kb_id': 'm.0c5f_j', 'text': 'Mike Tomlin'}
             for answer in sample['answers']:
                 keyword = 'text' if type(answer['kb_id']) == int else 'kb_id'
                 answer_ent = self.entity2id[answer[keyword]]
@@ -437,7 +450,7 @@ class BasicDataLoader(object):
 
         return np.array(head_list, dtype=int),  np.array(rel_list, dtype=int), np.array(tail_list, dtype=int)
 
-    
+    # kb_adj_mat来源
     def _build_fact_mat(self, sample_ids, fact_dropout):
         """
         Creates local adj mats that contain entities, relations, and structure.
@@ -557,6 +570,7 @@ class SingleDataLoader(BasicDataLoader):
         true_batch_id = None
         seed_dist = self.seed_distribution[sample_ids]
         q_input = self.deal_q_type(q_type)
+        # batch_heads, batch_rels, batch_tails, batch_ids, fact_ids, weight_list
         kb_adj_mats = self._build_fact_mat(sample_ids, fact_dropout=fact_dropout)
         
         if test:
@@ -568,7 +582,7 @@ class SingleDataLoader(BasicDataLoader):
                    true_batch_id, \
                    self.answer_dists[sample_ids], \
                    self.answer_lists[sample_ids],\
-
+        # candidate_entities 是随机初始化的
         return self.candidate_entities[sample_ids], \
                self.query_entities[sample_ids], \
                kb_adj_mats, \
@@ -582,7 +596,9 @@ def load_dict(filename):
     word2id = dict()
     with open(filename, encoding='utf-8') as f_in:
         for line in f_in:
+            # 'm.0jsd7n'
             word = line.strip()
+            # 1
             word2id[word] = len(word2id)
     return word2id
 
@@ -590,11 +606,16 @@ def load_data(config, tokenize):
 
     """
     Creates train/val/test dataloaders (seperately).
+    config = args
+    tokenize = 'sbert'
     """
-   
+    # 'data/webqsp/'+'entities.txt'
+    # entity2id = {'m.01vrt_c: 0, ...'}
     entity2id = load_dict(config['data_folder'] + config['entity2id'])
+    # word2id = {'what':0, ...}
     word2id = load_dict(config['data_folder'] + config['word2id'])
     relation2id = load_dict(config['data_folder'] + config['relation2id'])
+    # config["debug"] = False
     if config["debug"] :
         train_data = SingleDataLoader(config, word2id, relation2id, entity2id, tokenize, data_type="dev")
         valid_data = train_data
@@ -602,6 +623,7 @@ def load_data(config, tokenize):
         # valid_data = SingleDataLoader(config, word2id, relation2id, entity2id, tokenize, data_type="dev")
         # test_data = SingleDataLoader(config, word2id, relation2id, entity2id, tokenize, data_type="dev")
         num_word = train_data.num_word
+    #     config["is_eval] = False
     elif config["is_eval"]:
         train_data = None
         valid_data = SingleDataLoader(config, word2id, relation2id, entity2id, tokenize, data_type="dev")
@@ -632,5 +654,5 @@ def load_data(config, tokenize):
 
 if __name__ == "__main__":
     st = time.time()
-    #args = get_config()
+    # args = get_config()
     load_data(args)
