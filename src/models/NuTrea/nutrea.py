@@ -150,6 +150,8 @@ class NuTrea(BaseModel):
             self.instruction = BERTInstruction(args, self.word_embedding, self.num_word, args['lm'])
             self.constraint = BERTInstruction(args, self.word_embedding, self.num_word, args['lm'], constraint=True)
             #self.relation_linear = nn.Linear(in_features=self.instruction.word_dim, out_features=entity_dim)
+        # 多头注意力层
+
         # self.relation_linear = nn.Linear(in_features=entity_dim, out_features=entity_dim)
         # self.relation_linear_inv = nn.Linear(in_features=entity_dim, out_features=entity_dim)
 
@@ -245,10 +247,49 @@ class NuTrea(BaseModel):
         """
         IEF = torch.log(self.V / self.EF.clip(1))
         # 更新IEF状态：将计算出的IEF值更新到模型的self.IEF中，同样进行裁剪以排除负值
-        # 取最后一次结果
+        # 取最后一次结果(EF与V都是)
         self.IEF.data = IEF.clip(0)
 
+    def train_iwf(self, batch):
+        """统计所有关系为r的实体频率"""
+        local_entity, query_entities, kb_adj_mat, query_text, seed_dist, true_batch_id, answer_dist = batch
+        local_entity = torch.from_numpy(local_entity).type('torch.LongTensor').to(self.device)
+        # local_entity_mask = (local_entity != self.num_entity).float()
+        query_entities = torch.from_numpy(query_entities).type('torch.FloatTensor').to(self.device)
+        answer_dist = torch.from_numpy(answer_dist).type('torch.FloatTensor').to(self.device)
+        seed_dist = torch.from_numpy(seed_dist).type('torch.FloatTensor').to(self.device)
+        current_dist = Variable(seed_dist, requires_grad=True)
 
+        q_input= torch.from_numpy(query_text).type('torch.LongTensor').to(self.device)
+
+        self.init_reason(curr_dist=current_dist, local_entity=local_entity,
+                         kb_adj_mat=kb_adj_mat, q_input=q_input, query_entities=query_entities)
+
+        # 根据答案分布的形状计算批次大小bsize、每个批次的节点数bnode_num和节点总数node_num，以及关系类型的数量rtype_num。
+        # 8, 2000
+        bsize, bnode_num = answer_dist.shape
+        node_num = bsize * bnode_num
+        # 关系数量
+        rtype_num = self.reasoning.rel_features.shape[0]
+
+        h2r_idx = self.reasoning.head2fact_mat.coalesce().indices()
+        h2r_idx[0] = self.reasoning.batch_rels
+        # 构建头实体到关系（Head-to-Relation）的稀疏矩阵：使用head2fact_mat的索引，并结合关系ID，构建表示每个关系类型与所有节点连接情况的稀疏矩阵h2r_RF，值全部设为1。
+        h2r_RF = torch.sparse_coo_tensor(h2r_idx, torch.ones_like(h2r_idx[0]), (rtype_num*2, node_num))
+
+        t2r_idx = self.reasoning.tail2fact_mat.coalesce().indices()
+        t2r_idx[0] = self.reasoning.batch_rels + rtype_num
+        # 构建尾实体到关系（Tail-to-Relation）的稀疏矩阵：类似地，构建表示尾实体连接情况的稀疏矩阵t2r_RF，并将关系ID偏移以区分头尾实体的关系。
+        t2r_RF = torch.sparse_coo_tensor(t2r_idx, torch.ones_like(t2r_idx[0]), (rtype_num*2, node_num))
+        # 合并关系频率：合并h2r_RF和t2r_RF得到总的RF，表示每个关系类型与所有节点的连接总和
+        RF = (h2r_RF + t2r_RF).coalesce()
+        # 构建关系到实体（Relation-to-Entity）的稀疏矩阵：利用RF的索引构建矩阵R2E，值也为1，表示每种关系与实体的连接。
+        R2E = torch.sparse_coo_tensor(RF.indices(), torch.ones_like(RF.values()), RF.shape).coalesce()
+
+        # 计算实体频率（EF）：通过计算R2E中每行的总和，得到每个实体的连接数量，即实体频率
+        EF = torch.sparse.sum(R2E, 1)
+        # todense是转为密集张量
+        self.EF += EF.to_dense()
 
     def forward(self, batch, training=False):
         """
@@ -369,9 +410,14 @@ class NuTrea(BaseModel):
             # 将node_init调整形状以匹配local_entity的形状，以便适配模型中的实体嵌入。
             node_init = node_init.reshape(local_entity.shape[0], local_entity.shape[1], -1)
             # 如何设置了RF-IEF则进行训练并赋值
+            # 8,2000,100
             self.local_entity_emb = node_init
             self.init_entity_emb = node_init
             self.reasoning.local_entity_emb = node_init
+
+        """
+        注意力层
+        """
 
         """
         NuTrea reasoning

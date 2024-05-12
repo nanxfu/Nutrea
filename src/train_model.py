@@ -189,8 +189,10 @@ class Trainer_KBQA(object):
         # 356
         for iteration in tqdm(range(num_iter)):
             batch = self.train_data.get_batch(iteration, self.args['batch_size'], self.args['fact_drop'])
-
-            self.model.train_ief(batch)
+            # self.model.train_ief(batch)
+            self.model.train_iwf(batch)
+        self.model.IWF = torch.log(self.model.EF.sum()/self.model.EF.clip(1)).clip(0)
+        self.model.IEF.data = self.model.IWF
 
     def train_epoch(self):
         self.model.train()

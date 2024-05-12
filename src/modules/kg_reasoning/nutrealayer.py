@@ -43,6 +43,7 @@ class NuTreaLayer(BaseGNNLayer):
         self.init_layers(args)
 
 
+
     def init_layers(self, args):
         # 定义激活函数（如sigmoid、softmax）、线性变换函数（如g_score_func、h_score_func、glob_lin等）和Dropout层。
         # 初始化SubgraphPool实例（用于子图池化）。
@@ -70,7 +71,10 @@ class NuTreaLayer(BaseGNNLayer):
             self.add_module('pos_emb_inv' + str(i), nn.Embedding(self.num_relation, entity_dim))
 
         self.lin_m =  nn.Linear(in_features=(self.num_expansion_ins)*entity_dim, out_features=entity_dim)
-
+        heads = 4
+        dims = entity_dim
+        dropout_pro = 0.0
+        self.MultiHeadLayer = torch.nn.MultiheadAttention(embed_dim=entity_dim, num_heads=heads, dropout=dropout_pro)
     def init_reason(self, local_entity, kb_adj_mat, local_entity_emb, rel_features, rel_features_inv, query_entities, init_dist, query_node_emb=None):
         # 初始化推理过程，包括构建稀疏矩阵和设置批次信息。
         # 计算实体掩码、存储批大小和最大本地实体数量。
@@ -170,9 +174,10 @@ class NuTreaLayer(BaseGNNLayer):
 
         # neighbor relation aggregation
         fact2node_mat = self.fact2tail_mat if inverse else self.fact2head_mat
+        # 聚合公式(7)
         con_pooled = self.aggregator(con_val, fact2node_mat)
-        con_pooled = leaf_nodes_list[0].flatten().unsqueeze(-1) * con_pooled 
-
+        con_pooled = leaf_nodes_list[0].flatten().unsqueeze(-1) * con_pooled
+        x, _ = self.MultiHeadLayer(con_pooled.view(batch_size, max_local_entity, self.entity_dim),con_pooled.view(batch_size, max_local_entity, self.entity_dim),con_pooled.view(batch_size, max_local_entity, self.entity_dim))
         if depth > 1 :
             adj = self.head2tail_mat.transpose(1,0).coalesce() if inverse else self.head2tail_mat.coalesce()
             idx, vals = pyg.utils.add_remaining_self_loops(adj.indices(), adj.values())
@@ -182,7 +187,7 @@ class NuTreaLayer(BaseGNNLayer):
                 con_pooled = leaf_nodes_list[d+1].flatten().unsqueeze(-1) * con_pooled 
         
         pooled_rep = con_pooled.view(batch_size, max_local_entity, self.entity_dim)
-
+        print(x)
         return pooled_rep
     # ============================
 
@@ -239,8 +244,9 @@ class NuTreaLayer(BaseGNNLayer):
             neighbor_reps.append(neighbor_rep)
              # 将当前局部实体表示与邻居表示拼接，经过两次线性变换（e2e_linear 和 e2e_linear2，中间加入ReLU激活和Dropout），更新局部实体表示 self.local_entity_emb。
         neighbor_reps = torch.cat(neighbor_reps, dim=2)
-        
+        #
         next_local_entity_emb = torch.cat((self.local_entity_emb, neighbor_reps), dim=2)
+        # 局部实体表示更新
         self.local_entity_emb = e2e_linear2(F.relu(e2e_linear(self.linear_drop(next_local_entity_emb))))
         # 利用 expansion_score_func 计算扩张得分 expansion_score，形状为 (batch_size, max_local_entity)。
         expansion_score = expansion_score_func(self.linear_drop(self.local_entity_emb)).squeeze(dim=2)
@@ -250,6 +256,7 @@ class NuTreaLayer(BaseGNNLayer):
         Backup
         对于约束指令中的每一个约束，利用 pool_subgraph 方法分别计算正向和反向子图表示，并将它们堆叠在一起。将更新后的局部实体表示与子图表示拼接，经过两次线性变换（s2e_linear 和 s2e_linear2，中间加入ReLU激活和Dropout），再次更新局部实体表示 self.local_entity_emb。
         """
+        # list(6): 8, 2000, 100
         subgraph_reps = []
         for j in range(relational_con.size(1)):
             pooled_rep = self.pool_subgraph(self.leaf_nodes, relational_con[:,j,:], con_linear, depth=self.backup_depth)
@@ -257,8 +264,11 @@ class NuTreaLayer(BaseGNNLayer):
 
             pooled_rep = self.pool_subgraph(self.leaf_nodes, relational_con[:,j,:], con_linear, depth=self.backup_depth, inverse=True)
             subgraph_reps.append(pooled_rep)
-            
+        #
+        #subgraph_reps = Cv
         subgraph_reps = torch.cat(subgraph_reps, dim=2)
+
+        # 论文公式(8)
         next_local_entity_emb = torch.cat((self.local_entity_emb, subgraph_reps), dim=2)
         self.local_entity_emb = s2e_linear2(F.relu(s2e_linear(self.linear_drop(next_local_entity_emb))))
         # 利用 backup_score_func 计算备份得分 backup_score，形状为 (batch_size, max_local_entity)
