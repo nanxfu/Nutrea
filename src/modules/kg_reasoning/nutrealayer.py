@@ -71,9 +71,9 @@ class NuTreaLayer(BaseGNNLayer):
             self.add_module('pos_emb_inv' + str(i), nn.Embedding(self.num_relation, entity_dim))
 
         self.lin_m =  nn.Linear(in_features=(self.num_expansion_ins)*entity_dim, out_features=entity_dim)
-        heads = 4
+        heads = 2
         dims = entity_dim
-        dropout_pro = 0.0
+        dropout_pro = 0.2
         self.MultiHeadLayer = torch.nn.MultiheadAttention(embed_dim=entity_dim, num_heads=heads, dropout=dropout_pro)
     def init_reason(self, local_entity, kb_adj_mat, local_entity_emb, rel_features, rel_features_inv, query_entities, init_dist, query_node_emb=None):
         # 初始化推理过程，包括构建稀疏矩阵和设置批次信息。
@@ -187,8 +187,8 @@ class NuTreaLayer(BaseGNNLayer):
                 con_pooled = leaf_nodes_list[d+1].flatten().unsqueeze(-1) * con_pooled 
         
         pooled_rep = con_pooled.view(batch_size, max_local_entity, self.entity_dim)
-        print(x)
-        return pooled_rep
+        return x
+        # return pooled_rep
     # ============================
 
     def forward(self, current_dist, relational_ins, relational_con, step=0, return_score=False):

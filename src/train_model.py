@@ -8,10 +8,10 @@ import torch
 from torch.optim.lr_scheduler import ExponentialLR
 import torch.optim as optim
 from utils import RAdam
-from torchview import draw_graph
+# from torchview import draw_graph
 from tqdm import tqdm
 tqdm.monitor_iterval = 0
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 from dataset_load import load_data
 from models.NuTrea.nutrea import NuTrea
 from evaluate import Evaluator
