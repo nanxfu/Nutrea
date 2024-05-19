@@ -151,7 +151,7 @@ class NuTrea(BaseModel):
             self.constraint = BERTInstruction(args, self.word_embedding, self.num_word, args['lm'], constraint=True)
             #self.relation_linear = nn.Linear(in_features=self.instruction.word_dim, out_features=entity_dim)
         # 多头注意力层
-
+        # self.LN = nn.LayerNorm
         # self.relation_linear = nn.Linear(in_features=entity_dim, out_features=entity_dim)
         # self.relation_linear_inv = nn.Linear(in_features=entity_dim, out_features=entity_dim)
 

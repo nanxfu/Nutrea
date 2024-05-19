@@ -1,11 +1,12 @@
-
 from tqdm import tqdm
+
 tqdm.monitor_iterval = 0
 import torch
 import numpy as np
 import math, os
 import json
 import pickle
+
 
 def cal_accuracy(pred, answer_dist):
     """
@@ -28,7 +29,7 @@ def f1_and_hits(answers, candidate2prob, id2entity, eps=0.5):
     for a in answers:
         ans.append(id2entity[a])
     correct = 0
-    cand_list = sorted(candidate2prob, key=lambda x:x[1], reverse=True)
+    cand_list = sorted(candidate2prob, key=lambda x: x[1], reverse=True)
     if len(cand_list) == 0:
         best_ans = -1
     else:
@@ -46,11 +47,11 @@ def f1_and_hits(answers, candidate2prob, id2entity, eps=0.5):
         if len(retrieved) == 0:
             return 1.0, 1.0, 1.0, 1.0, 0, retrieved, ans  # precision, recall, f1, hits
         else:
-            return 0.0, 1.0, 0.0, 1.0, 1, retrieved , ans # precision, recall, f1, hits
+            return 0.0, 1.0, 0.0, 1.0, 1, retrieved, ans  # precision, recall, f1, hits
     else:
         hits = float(best_ans in answers)
         if len(retrieved) == 0:
-            return 1.0, 0.0, 0.0, hits, 2, retrieved , ans # precision, recall, f1, hits
+            return 1.0, 0.0, 0.0, hits, 2, retrieved, ans  # precision, recall, f1, hits
         else:
             p, r = correct / len(retrieved), correct / len(answers)
             f1 = 2.0 / (1.0 / p + 1.0 / r) if p != 0 and r != 0 else 0.0
@@ -63,7 +64,7 @@ class Evaluator:
         self.model = model
         self.args = args
         self.eps = args['eps']
-        
+
         id2entity = {idx: entity for entity, idx in entity2id.items()}
         self.id2entity = id2entity
         id2relation = {idx: relation for relation, idx in relation2id.items()}
@@ -86,7 +87,7 @@ class Evaluator:
 
     def write_info(self, valid_data, tp_list, num_step):
         question_list = valid_data.get_quest()
-        #num_step = steps
+        # num_step = steps
         obj_list = []
         if tp_list is not None:
             # attn_list = [tp[1] for tp in tp_list]
@@ -119,7 +120,7 @@ class Evaluator:
         return obj_list
 
     def evaluate(self, valid_data, test_batch_size=20, write_info=False):
-        #write_info = True
+        # write_info = True
         self.model.eval()
         self.count = 0
         eps = self.eps
@@ -142,7 +143,7 @@ class Evaluator:
                 loss, extras, pred_dist, tp_list = self.model(batch[:-1])
                 pred = torch.max(pred_dist, dim=1)[1]
             local_entity, query_entities, relations, query_text, \
-            seed_dist, true_batch_id, answer_dist, answer_list = batch
+                seed_dist, true_batch_id, answer_dist, answer_list = batch
             # temp += tp_list
             # self.true_batch_id = true_batch_id
             if write_info:
@@ -156,32 +157,32 @@ class Evaluator:
             eval_loss.append(loss.item())
             # eval_acc.append(acc)
             # eval_max_acc.append(max_acc)
-            #pr_dist2 = pred_dist#.copy()
-            #pred_dist = pr_dist2[-1]
+            # pr_dist2 = pred_dist#.copy()
+            # pred_dist = pr_dist2[-1]
             batch_size = pred_dist.size(0)
             batch_answers = answer_list
             batch_candidates = candidate_entities
             pad_ent_id = len(id2entity)
-            
+
             ####
             # path_analysis(self.args, query_text, query_entities, true_answers, pred, relations, pred_dist)
             # error_analysis(self.args, self.model.instruction.tokenizer, query_text, true_answers, pred, relations)
             ####
             # corr += [(an[pr] == 1).item() for pr, an in zip(pred, true_answers)]
-            #pr_dist2 = pred_dist.copy()
-            #for pred_dist in pr_dist2:
+            # pr_dist2 = pred_dist.copy()
+            # for pred_dist in pr_dist2:
             for batch_id in range(batch_size):
                 answers = batch_answers[batch_id]
                 candidates = batch_candidates[batch_id, :].tolist()
                 probs = pred_dist[batch_id, :].tolist()
                 seed_entities = query_entities[batch_id, :].tolist()
-                #print(seed_entities)
-                #print(candidates)
+                # print(seed_entities)
+                # print(candidates)
                 candidate2prob = []
                 for c, p, s in zip(candidates, probs, seed_entities):
                     if s == 1.0:
                         # ignore seed entities
-                        #print(c, self.id2entity)
+                        # print(c, self.id2entity)
                         # print(c, p, s)
                         # if c < pad_ent_id:
                         #     tp_obj['seed'] = self.id2entity[c]
@@ -191,7 +192,8 @@ class Evaluator:
                     if p < ignore_prob:
                         continue
                     candidate2prob.append((c, p))
-                precision, recall, f1, hit, case, retrived , ans = f1_and_hits(answers, candidate2prob, self.id2entity, eps)
+                precision, recall, f1, hit, case, retrived, ans = f1_and_hits(answers, candidate2prob, self.id2entity,
+                                                                              eps)
                 if write_info:
                     tp_obj = obj_list[batch_id]
                     tp_obj['answers'] = ans
@@ -222,31 +224,32 @@ class Evaluator:
         # with open('out/analysis/with_con.pkl', 'wb') as handle:
         # with open('out/analysis/without_con.pkl', 'wb') as handle:
         #     pickle.dump([temp, corr], handle, protocol=pickle.HIGHEST_PROTOCOL)
-            
-        return np.mean(f1s), np.mean(hits)
+
+        return np.mean(f1s), np.mean(hits), np.mean(eval_loss)
+
 
 # with open('ReaRev_data/webqsp/vocab_new.txt', 'r') as f:
 #     VOCABS_WQP = f.readlines()
 # with open('ReaRev_data/CWQ/vocab_new.txt', 'r') as f:
 #     VOCABS_CWQ = f.readlines()
 
-def error_analysis(args, tokenizer, query_text, answers, preds, relations) :
-    if 'webqsp' in args['data_folder'] :
+def error_analysis(args, tokenizer, query_text, answers, preds, relations):
+    if 'webqsp' in args['data_folder']:
         data = 'WQP'
-    elif 'CWQ' in args['data_folder'] :
+    elif 'CWQ' in args['data_folder']:
         data = 'CWQ'
 
     correct_lines, wrong_lines = [], []
-    for sample, answer, pred in zip(query_text, answers, preds) :
+    for sample, answer, pred in zip(query_text, answers, preds):
         correct = 'CORRECT' if answer[pred] == 1 else 'WRONG'
         answer_num = int(answer.sum().item())
-        if correct == 'CORRECT' :
+        if correct == 'CORRECT':
             correct_lines.append(' '.join([tokenizer.convert_ids_to_tokens(int(x)) for x in sample if x != 0]) + '\n')
             correct_lines.append(f'# of Answers = {answer_num}       ({correct})\n\n')
-        else :
+        else:
             wrong_lines.append(' '.join([tokenizer.convert_ids_to_tokens(int(x)) for x in sample if x != 0]) + '\n')
             wrong_lines.append(f'# of Answers = {answer_num}       ({correct})\n\n')
-        
+
     with open(f'out/analysis/{data}_error_anls_correct.txt', 'a') as f:
         f.writelines(correct_lines)
     with open(f'out/analysis/{data}_error_anls_wrong.txt', 'a') as f:

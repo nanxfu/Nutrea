@@ -73,8 +73,9 @@ class NuTreaLayer(BaseGNNLayer):
         self.lin_m =  nn.Linear(in_features=(self.num_expansion_ins)*entity_dim, out_features=entity_dim)
         heads = 2
         dims = entity_dim
-        dropout_pro = 0.2
-        self.MultiHeadLayer = torch.nn.MultiheadAttention(embed_dim=entity_dim, num_heads=heads, dropout=dropout_pro)
+        dropout_pro = 0.4
+        self.MultiHeadLayer = torch.nn.MultiheadAttention(embed_dim=entity_dim, num_heads=heads, dropout=dropout_pro, batch_first=True)
+        self.MultiHeadLayer2 = torch.nn.MultiheadAttention(embed_dim=entity_dim, num_heads=heads, dropout=dropout_pro, batch_first=True)
     def init_reason(self, local_entity, kb_adj_mat, local_entity_emb, rel_features, rel_features_inv, query_entities, init_dist, query_node_emb=None):
         # 初始化推理过程，包括构建稀疏矩阵和设置批次信息。
         # 计算实体掩码、存储批大小和最大本地实体数量。
@@ -134,7 +135,7 @@ class NuTreaLayer(BaseGNNLayer):
 
         assert not torch.isnan(f2e_emb).any()
         neighbor_rep = f2e_emb.view(batch_size, max_local_entity, self.entity_dim)
-        
+        # neighbor_rep, _ = self.MultiHeadLayer2(neighbor_rep,neighbor_rep,neighbor_rep)
         return neighbor_rep
     # 这三个方法分别为设置批处理邻接矩阵、获取下一层叶节点和执行子图池化。这些方法用于辅助推理过程中对知识图谱结构的操作和信息传递。
     def set_batch_adj(self):
@@ -177,17 +178,19 @@ class NuTreaLayer(BaseGNNLayer):
         # 聚合公式(7)
         con_pooled = self.aggregator(con_val, fact2node_mat)
         con_pooled = leaf_nodes_list[0].flatten().unsqueeze(-1) * con_pooled
-        x, _ = self.MultiHeadLayer(con_pooled.view(batch_size, max_local_entity, self.entity_dim),con_pooled.view(batch_size, max_local_entity, self.entity_dim),con_pooled.view(batch_size, max_local_entity, self.entity_dim))
         if depth > 1 :
             adj = self.head2tail_mat.transpose(1,0).coalesce() if inverse else self.head2tail_mat.coalesce()
             idx, vals = pyg.utils.add_remaining_self_loops(adj.indices(), adj.values())
             adj = torch.sparse_coo_tensor(idx, vals, adj.size()).coalesce()
             for d in range(depth-1) :
                 con_pooled = self.aggregator(con_pooled, adj)
-                con_pooled = leaf_nodes_list[d+1].flatten().unsqueeze(-1) * con_pooled 
-        
-        pooled_rep = con_pooled.view(batch_size, max_local_entity, self.entity_dim)
-        return x
+                con_pooled = leaf_nodes_list[d+1].flatten().unsqueeze(-1) * con_pooled
+        con_pooled, _ = self.MultiHeadLayer(con_pooled.view(batch_size, max_local_entity, self.entity_dim),
+                                            con_pooled.view(batch_size, max_local_entity, self.entity_dim),
+                                            con_pooled.view(batch_size, max_local_entity, self.entity_dim))
+
+        # pooled_rep = con_pooled.view(batch_size, max_local_entity, self.entity_dim)
+        return con_pooled
         # return pooled_rep
     # ============================
 
@@ -247,7 +250,9 @@ class NuTreaLayer(BaseGNNLayer):
         #
         next_local_entity_emb = torch.cat((self.local_entity_emb, neighbor_reps), dim=2)
         # 局部实体表示更新
-        self.local_entity_emb = e2e_linear2(F.relu(e2e_linear(self.linear_drop(next_local_entity_emb))))
+        # next_local_entity_emb= self.MultiHeadLayer2(next_local_entity_emb,next_local_entity_emb,next_local_entity_emb)
+        processed_emb = e2e_linear2(F.relu(e2e_linear(self.linear_drop(next_local_entity_emb))))
+        self.local_entity_emb,_ = self.MultiHeadLayer2(processed_emb,processed_emb,processed_emb)
         # 利用 expansion_score_func 计算扩张得分 expansion_score，形状为 (batch_size, max_local_entity)。
         expansion_score = expansion_score_func(self.linear_drop(self.local_entity_emb)).squeeze(dim=2)
 

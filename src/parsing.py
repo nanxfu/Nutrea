@@ -25,8 +25,8 @@ def add_shared_args(parser):
     parser.add_argument('--entity_dim', default=100, type=int)
     parser.add_argument('--kg_dim', default=100, type=int)
     parser.add_argument('--word_dim', default=300, type=int)
-    parser.add_argument('--lm_dropout', default=0.3, type=float)
-    parser.add_argument('--linear_dropout', default=0.2, type=float)
+    parser.add_argument('--lm_dropout', default=0.4, type=float)
+    parser.add_argument('--linear_dropout', default=0.4, type=float)
 
     # optimization
     parser.add_argument('--num_epoch', default=100, type=int)
@@ -35,7 +35,7 @@ def add_shared_args(parser):
     parser.add_argument('--batch_size', default=20, type=int)
     parser.add_argument('--gradient_clip', default=1.0, type=float)
     parser.add_argument('--lr', default=0.0005, type=float)
-    parser.add_argument('--decay_rate', default=0.0, type=float)
+    parser.add_argument('--decay_rate', default=0.0001, type=float)
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--lr_schedule', action='store_true')
     parser.add_argument('--label_smooth', default=0.1, type=float)

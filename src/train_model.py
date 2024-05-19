@@ -11,6 +11,7 @@ from utils import RAdam
 # from torchview import draw_graph
 from tqdm import tqdm
 tqdm.monitor_iterval = 0
+from torch.utils.tensorboard import SummaryWriter
 # from torch.utils.tensorboard import SummaryWriter
 from dataset_load import load_data
 from models.NuTrea.nutrea import NuTrea
@@ -76,7 +77,7 @@ class Trainer_KBQA(object):
         if self.args['optimizer'] == 'adam' :
             self.optim_model = optim.Adam(trainable, lr=self.learning_rate)
         elif self.args['optimizer'] == 'radam' :
-            self.optim_model = RAdam(trainable, lr=self.learning_rate)
+            self.optim_model = RAdam(trainable, lr=self.learning_rate,weight_decay=0.04)
         elif self.args['optimizer'] == 'sgd' :
             self.optim_model = optim.SGD(trainable, lr=self.learning_rate)
         if self.decay_rate > 0:
@@ -115,7 +116,11 @@ class Trainer_KBQA(object):
             self.warmup()
         print("Start Training------------------")
         eval_f1, eval_h1, test_f1, test_h1 = 0.0, 0.0, 0.0, 0.0
+        current_time = time.strftime("%Y%m%d-%H%M%S", time.localtime())
 
+        TrainningWriter = SummaryWriter(os.path.join('./runs/tf-logs/Trainning',current_time))
+        EvalWriter = SummaryWriter(os.path.join('./runs/tf-logs/Eval',current_time))
+        TestWriter = SummaryWriter(os.path.join('./runs/tf-logs/Test',current_time))
         for epoch in range(start_epoch, end_epoch + 1):
             st = time.time()
 
@@ -128,7 +133,7 @@ class Trainer_KBQA(object):
             self.logger.info("Training h1 : {:.4f}, f1 : {:.4f}".format(np.mean(h1_list_all), np.mean(f1_list_all)))
             
             if (epoch + 1) % eval_every == 0:
-                eval_f1, eval_h1 = self.evaluate(self.valid_data, self.test_batch_size)
+                eval_f1, eval_h1, eval_loss = self.evaluate(self.valid_data, self.test_batch_size)
                 self.logger.info("EVAL F1: {:.4f}, H1: {:.4f}".format(eval_f1, eval_h1))
 
                 do_test_h1, do_test_f1 = False, False
@@ -143,7 +148,7 @@ class Trainer_KBQA(object):
                     self.logger.info("BEST EVAL F1: {:.4f}".format(eval_f1))
                     do_test_f1 = True
 
-                test_f1, test_h1 = self.evaluate(self.test_data, self.test_batch_size)
+                test_f1, test_h1, test_loss = self.evaluate(self.test_data, self.test_batch_size)
                 
                 if do_test_h1 and test_h1 > self.best_test_h1:
                     self.best_test_h1 = test_h1
@@ -151,7 +156,21 @@ class Trainer_KBQA(object):
                     self.best_test_f1 = test_f1
 
                 self.logger.info("TEST F1: {:.4f} ({:.4f}), H1: {:.4f} ({:.4f})".format(test_f1, self.best_test_f1, test_h1, self.best_test_h1))
-                
+                EvalWriter.add_scalar(tag="Loss", scalar_value=eval_loss, global_step=epoch + 1)
+                EvalWriter.add_scalar(tag="F1", scalar_value=eval_f1, global_step=epoch + 1)
+                EvalWriter.add_scalar(tag="H1", scalar_value=eval_h1, global_step=epoch + 1)
+
+                TestWriter.add_scalar(tag="Loss", scalar_value=test_loss, global_step=epoch + 1)
+                TestWriter.add_scalar(tag="F1", scalar_value=test_f1, global_step=epoch + 1)
+                TestWriter.add_scalar(tag="H1", scalar_value=test_h1, global_step=epoch + 1)
+
+            TrainningWriter.add_scalar(tag="Loss", scalar_value=loss, global_step=epoch + 1)
+            TrainningWriter.add_scalar(tag="F1", scalar_value=np.mean(f1_list_all), global_step=epoch + 1)
+            TrainningWriter.add_scalar(tag="H1", scalar_value=np.mean(h1_list_all), global_step=epoch + 1)
+
+        TrainningWriter.close()
+        EvalWriter.close()
+        TestWriter.close()
         self.logger.info('Train Done! Evaluate on testset with saved model')
         print("End Training------------------")
         self.evaluate_best()
