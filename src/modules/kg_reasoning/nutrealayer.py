@@ -73,9 +73,9 @@ class NuTreaLayer(BaseGNNLayer):
         self.lin_m =  nn.Linear(in_features=(self.num_expansion_ins)*entity_dim, out_features=entity_dim)
         heads = 2
         dims = entity_dim
-        dropout_pro = 0.4
+        dropout_pro = 0.5
         self.MultiHeadLayer = torch.nn.MultiheadAttention(embed_dim=entity_dim, num_heads=heads, dropout=dropout_pro, batch_first=True)
-        self.MultiHeadLayer2 = torch.nn.MultiheadAttention(embed_dim=entity_dim, num_heads=heads, dropout=dropout_pro, batch_first=True)
+        # self.MultiHeadLayer2 = torch.nn.MultiheadAttention(embed_dim=entity_dim, num_heads=heads, dropout=dropout_pro, batch_first=True)
     def init_reason(self, local_entity, kb_adj_mat, local_entity_emb, rel_features, rel_features_inv, query_entities, init_dist, query_node_emb=None):
         # 初始化推理过程，包括构建稀疏矩阵和设置批次信息。
         # 计算实体掩码、存储批大小和最大本地实体数量。
@@ -252,7 +252,7 @@ class NuTreaLayer(BaseGNNLayer):
         # 局部实体表示更新
         # next_local_entity_emb= self.MultiHeadLayer2(next_local_entity_emb,next_local_entity_emb,next_local_entity_emb)
         processed_emb = e2e_linear2(F.relu(e2e_linear(self.linear_drop(next_local_entity_emb))))
-        self.local_entity_emb,_ = self.MultiHeadLayer2(processed_emb,processed_emb,processed_emb)
+        self.local_entity_emb= processed_emb
         # 利用 expansion_score_func 计算扩张得分 expansion_score，形状为 (batch_size, max_local_entity)。
         expansion_score = expansion_score_func(self.linear_drop(self.local_entity_emb)).squeeze(dim=2)
 

@@ -77,7 +77,7 @@ class Trainer_KBQA(object):
         if self.args['optimizer'] == 'adam' :
             self.optim_model = optim.Adam(trainable, lr=self.learning_rate)
         elif self.args['optimizer'] == 'radam' :
-            self.optim_model = RAdam(trainable, lr=self.learning_rate,weight_decay=0.04)
+            self.optim_model = RAdam(trainable, lr=self.learning_rate,weight_decay=0.9)
         elif self.args['optimizer'] == 'sgd' :
             self.optim_model = optim.SGD(trainable, lr=self.learning_rate)
         if self.decay_rate > 0:
@@ -178,13 +178,13 @@ class Trainer_KBQA(object):
     def evaluate_best(self):
         filename = os.path.join(self.args['checkpoint_dir'], "{}-h1.ckpt".format(self.args['experiment_name']))
         self.load_ckpt(filename)
-        eval_f1, eval_h1 = self.evaluate(self.test_data, self.test_batch_size, write_info=False)
+        eval_f1, eval_h1, eval_loss = self.evaluate(self.test_data, self.test_batch_size, write_info=False)
         self.logger.info("Best h1 evaluation")
         self.logger.info("TEST F1: {:.4f}, H1: {:.4f}".format(eval_f1, eval_h1))
 
         filename = os.path.join(self.args['checkpoint_dir'], "{}-f1.ckpt".format(self.args['experiment_name']))
         self.load_ckpt(filename)
-        eval_f1, eval_h1 = self.evaluate(self.test_data, self.test_batch_size,  write_info=False)
+        eval_f1, eval_h1, eval_loss = self.evaluate(self.test_data, self.test_batch_size,  write_info=False)
         self.logger.info("Best f1 evaluation")
         self.logger.info("TEST F1: {:.4f}, H1: {:.4f}".format(eval_f1, eval_h1))
 
@@ -199,7 +199,7 @@ class Trainer_KBQA(object):
         #     self.load_ckpt(filename)
         # eval_f1, eval_hits = self.evaluate(self.valid_data, self.test_batch_size, write_info=False)
         # self.logger.info("EVAL F1: {:.4f}, H1: {:.4f}".format(eval_f1, eval_hits))
-        test_f1, test_hits = self.evaluate(self.test_data, self.test_batch_size, write_info=False)
+        test_f1, test_hits, test_loss = self.evaluate(self.test_data, self.test_batch_size, write_info=False)
         self.logger.info("TEST F1: {:.4f}, H1: {:.4f}".format(test_f1, test_hits))
         
     def warmup(self):
